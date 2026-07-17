@@ -1,51 +1,128 @@
-# Deploying the Screening Room centrally
+# Deploying the RedTee Screening Room (Cloud PaaS)
 
-One process, stdlib-only, all state in this folder (config.json, reviews/, bundles/).
-Back up = copy the folder. Migrate = move the folder.
+One stdlib-only process. Code ships in the Docker image at `/app`; all persistent state
+(config, reviews, uploaded videos, sessions, invites, slide bundles) lives in a volume
+mounted at `/data`. Backup = copy the volume. Migrate = move the volume.
 
-## 1. Lock it down first (any deployment)
-In `config.json` set:
-    "access_code": "something-your-org-shares",
-    "admin_code":  "something-only-you-know"
-Reviewers enter the access code once (90-day cookie) - or skip codes entirely: open /admin and hand each reviewer a personal magic invite link (signs them in AND prefills their identity; revocable). The admin code additionally unlocks
-setup: Drive folder / API key changes, video-bundle linking, and slide-bundle uploads.
+> **Why the split matters:** on Railway / Render / Fly a mounted volume starts empty and
+> hides whatever the image had at that path. If you mounted the volume at `/app` it would
+> shadow `server.py` and the container would fail to start. So code stays in `/app` and the
+> volume mounts at `/data`. The server reads `REDTEE_DATA_DIR=/data` (already set in the
+> Dockerfile) and keeps all state there.
 
-## 1.5 Connect Drive the PROPER way (OAuth - do this once)
-Your videos land in Drive automatically; OAuth lets the platform read that folder WITHOUT any
-public sharing (private folders + Shared Drives both work; reviewers stream through the server):
-  1. console.cloud.google.com -> new project -> enable "Google Drive API"
-  2. OAuth consent screen: Internal (Workspace) or External+test users
-  3. Credentials -> Create OAuth client -> Web application ->
-     authorized redirect URI: https://reviews.yourco.com/oauth/callback (or http://127.0.0.1:8712/oauth/callback locally)
-  4. In the setup card: paste client id + secret -> "Save & connect Google" -> approve drive.readonly
-The refresh token persists in config.json; revoke anytime at myaccount.google.com/permissions.
+---
 
-## 2. Company VM / any Linux box (recommended)
-    REDTEE_REVIEW_HOST=0.0.0.0 REDTEE_REVIEW_PORT=8712 python3 server.py
-Put nginx/Caddy in front for HTTPS (`caddy reverse-proxy --from reviews.yourco.com --to :8712`).
-Systemd unit: ExecStart=/usr/bin/python3 /opt/redtee/review/server.py, plus the two env vars.
+## 0. What you need before you start
+- The repo (this folder) pushed to GitHub/GitLab, OR the platform CLI installed.
+- Your two access codes decided (already in `config.json`: `access_code` and `admin_code`).
+  In the cloud we pass these as **env secrets** instead of relying on the file.
+- (Optional) A Google Drive folder id + API key, or OAuth credentials, for the video library.
+  You can also skip Drive entirely and upload videos through the admin UI after launch.
 
-## 3. Railway / Render / Fly (no VM)
-Use Dockerfile. Mount a persistent volume at /app (state lives there). Set
-REDTEE_REVIEW_CODE / REDTEE_REVIEW_ADMIN_CODE as env secrets instead of config values.
+## 1. Environment variables (all platforms)
+Set these on the service. They override anything in `config.json`:
 
-## 4. Today, from a laptop (temporary but centralized)
-    REDTEE_REVIEW_HOST=0.0.0.0 python review/server.py
-    cloudflared tunnel --url http://localhost:8712
-Share the generated https URL + the access code. (State still lives on that laptop.)
+| Variable                    | Value                          | Purpose                                  |
+|-----------------------------|--------------------------------|------------------------------------------|
+| `REDTEE_REVIEW_CODE`        | `MondeeAccess`                 | org-wide reviewer access code            |
+| `REDTEE_REVIEW_ADMIN_CODE`  | `RedTee_0806`                  | admin code (setup, invites, export)      |
+| `REDTEE_DATA_DIR`           | `/data`                        | already set in the Dockerfile; leave as is |
+| `REDTEE_REVIEW_HOST`        | `0.0.0.0`                      | already set in the Dockerfile            |
+| `REDTEE_REVIEW_PORT`        | `8712`                         | must match the platform's target port    |
 
-## Hosting videos ON the server (skip Drive entirely)
-The admin sees an "Upload video" button in the lobby (or:
-    curl -X POST --data-binary @lesson.mp4 "https://reviews.yourco.com/api/upload-video?name=lesson.mp4" -H "Cookie: <admin cookie>")
-Uploaded videos play in the native player (exact timestamps) with zero sharing setup.
-Drive stays supported, but nothing depends on it.
+The platforms all terminate HTTPS at the edge and set `X-Forwarded-Proto: https`, which the
+server uses to mark cookies `Secure`. No cert work needed on your side.
 
-## Publishing slides from the render machine
-The render machine never has to share a disk with the server:
-    python export_sidecar.py render_out/<lesson> https://reviews.yourco.com <admin_code>
-This packs timeline + slide SVGs into one sidecar and pushes it to the central server
-(POST /api/bundle). Videos come from the shared Drive folder as before.
+---
 
-## What is central after this
-videos: Drive folder | slides: pushed sidecars | reviews + config: server volume
-Nothing depends on any reviewer's or author's laptop.
+## 2A. Railway (simplest)
+1. **New Project → Deploy from GitHub repo** (or `railway init` with the CLI). Railway detects
+   the `Dockerfile` and builds it.
+2. **Variables** tab → add `REDTEE_REVIEW_CODE`, `REDTEE_REVIEW_ADMIN_CODE`,
+   `REDTEE_REVIEW_PORT=8712`. (`REDTEE_DATA_DIR` / `REDTEE_REVIEW_HOST` come from the Dockerfile.)
+3. **Volumes** → add a volume, mount path `/data`.
+4. **Settings → Networking** → Generate Domain. Set the **target/exposed port to `8712`** so
+   Railway routes the public HTTPS domain to the container port.
+5. Deploy. Open the generated `https://<app>.up.railway.app` and log in with the admin code at
+   `/admin`.
+
+## 2B. Render
+1. **New → Web Service** → connect the repo → Environment: **Docker**.
+2. **Environment** → add `REDTEE_REVIEW_CODE`, `REDTEE_REVIEW_ADMIN_CODE`, `REDTEE_REVIEW_PORT=8712`.
+3. **Disks** → add a disk, mount path `/data` (size to fit uploaded videos if you use uploads).
+4. Render routes `443 → your container port`; ensure it targets `8712` (it reads `EXPOSE 8712`,
+   and `REDTEE_REVIEW_PORT=8712` keeps them aligned).
+5. Create Web Service. Visit the `https://<app>.onrender.com` URL and sign in at `/admin`.
+
+## 2C. Fly.io
+1. `fly launch --no-deploy` (creates `fly.toml`; keep the Dockerfile).
+2. Edit `fly.toml` so the internal port matches:
+   ```toml
+   [http_service]
+     internal_port = 8712
+     force_https = true
+   ```
+3. Create a volume and set secrets:
+   ```
+   fly volumes create redtee_data --size 3
+   fly secrets set REDTEE_REVIEW_CODE=MondeeAccess REDTEE_REVIEW_ADMIN_CODE=RedTee_0806
+   ```
+4. Mount the volume in `fly.toml`:
+   ```toml
+   [mounts]
+     source = "redtee_data"
+     destination = "/data"
+   ```
+5. `fly deploy`. Open `https://<app>.fly.dev` and sign in at `/admin`.
+
+---
+
+## 3. First-boot configuration (once, in the browser)
+On first start with an empty volume, the server writes a starter `config.json` into `/data`.
+Because the codes come from env vars, auth is already ON. Then:
+
+1. Go to `https://<your-domain>/admin` and enter the **admin code**.
+2. In the setup card, connect your video library one of three ways:
+   - **Google OAuth (best):** paste OAuth client id + secret, click "Save & connect Google",
+     approve `drive.readonly`. Private folders and Shared Drives work; nothing needs public
+     sharing. Set the authorized redirect URI in Google Cloud to
+     `https://<your-domain>/oauth/callback`.
+   - **API key + public folder:** paste a Drive folder link and an API key.
+   - **Uploads:** skip Drive; use the "Upload video" button in the lobby.
+3. (Optional) Add `admin_emails` and per-collection visibility from the admin UI.
+
+## 4. Give people access
+- **Reviewers:** share the URL + the access code, OR from `/admin` create per-person magic
+  invite links (they sign in and prefill identity; revocable).
+- **Admins:** hand out the admin code, or add their email to `admin_emails` and have them sign
+  in with Google.
+
+## 5. Publishing slides from the render machine
+From the RedTee render repo (run locally, pushes over HTTPS):
+```
+python export_sidecar.py render_out/<lesson> https://<your-domain> <admin_code>
+```
+This packs timeline + slide SVGs into one sidecar and POSTs it to `/api/bundle` (admin-gated).
+
+## 6. Backups & migration
+Everything is in the `/data` volume: `config.json`, `reviews/`, `videos/`, `bundles/`,
+`sessions.json`, `invites.json`. Snapshot or copy that volume to back up; attach it to a new
+service to migrate. Losing the volume loses the auth salt (everyone re-logs in), the OAuth
+refresh token, and all reviews — so make sure the volume is actually mounted at `/data` before
+going live.
+
+## 7. Security checklist (post-deploy)
+- [ ] Confirm the app is reached only over `https://` (all three PaaS enforce this).
+- [ ] Confirm `/api/export.csv` returns 403 unless you're signed in with the admin code.
+- [ ] Confirm the `/data` volume is mounted (upload a test video; it should survive a redeploy).
+- [ ] Rotate `REDTEE_REVIEW_ADMIN_CODE` if it was ever shared outside the admin group.
+- [ ] Keep `config.json` out of git (it already is via `.gitignore`).
+
+---
+
+## Local run (for reference)
+```
+python server.py                    # http://127.0.0.1:8712, state next to server.py
+```
+Set `REDTEE_DATA_DIR` to relocate state locally too. Without any codes set, local runs are in
+OPEN mode (no auth) — fine for a laptop, never for a shared host.

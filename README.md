@@ -14,10 +14,11 @@ First run creates config.json (or copy config.example.json). Set access_code +
 admin_code (or admin_emails + Google OAuth) before exposing it. See DEPLOY.md
 for VM / Docker / tunnel deployment.
 
-## State = this folder
+## State = this folder (or REDTEE_DATA_DIR)
 config.json (settings) - reviews/ (feedback JSON) - videos/ (uploads) -
 bundles/ (slide sidecars) - sessions.json / invites.json. Back up by copying
-the folder.
+the folder. In containers, set REDTEE_DATA_DIR (e.g. /data) so this state lives on
+a mounted volume separate from the code - see DEPLOY.md.
 
 ## Slides from the render pipeline
 From the RedTee render repo:
