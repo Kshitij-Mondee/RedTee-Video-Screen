@@ -5,6 +5,7 @@
  "admin_code": "change-me-admin",
  "google_oauth": {"client_id": "", "client_secret": "", "refresh_token": ""},
  "drive_api_key": "",
+ "reports_drive_folder": "",
  "collections": [
   {"id": "col_main", "name": "RedTee lessons", "type": "drive",
    "folder_id": "PASTE_DRIVE_FOLDER_ID", "visibility": "public", "allowed_emails": []}

@@ -91,6 +91,33 @@ Because the codes come from env vars, auth is already ON. Then:
    - **Uploads:** skip Drive; use the "Upload video" button in the lobby.
 3. (Optional) Add `admin_emails` and per-collection visibility from the admin UI.
 
+## 3.5 Auto-save feedback reports to a Google Drive folder
+The server can mirror every review into a Drive folder you choose, so feedback lands in Drive
+automatically (no manual CSV exports).
+
+**One-time setup:**
+1. Connect Google via OAuth (step 3). The connect flow now requests **write** access
+   (`drive.file`) in addition to read. If you connected Google *before* this feature existed,
+   click **"Save & connect Google"** again to re-consent — the old read-only token cannot write.
+2. Set the destination folder. Paste a Drive folder link into `reports_drive_folder` in
+   `config.json`, or POST it to `/api/config` as `reports_folder` (admin). The connected Google
+   account must have edit access to that folder. Leave it empty to turn the feature off.
+
+**What gets written (created once, then overwritten in place — no duplicates):**
+- `<video>.report.html` — the human-readable feedback report, one per video.
+- `<video>.reviews.json` — the raw reviews for that video (machine-readable).
+- `all_reviews.csv` — the org-wide spreadsheet of every review.
+
+**When:** automatically (in the background) each time a review is submitted. To backfill the
+folder with everything already collected, an admin can POST `/api/push-reports`:
+```
+curl -X POST https://<your-domain>/api/push-reports -H "Cookie: <admin cookie>"
+```
+Drive errors never block a review submission — they're logged and skipped.
+
+> Scope note: the app uses least-privilege `drive.file`, so it can only see/overwrite the report
+> files it created in that folder — it cannot read your other Drive files.
+
 ## 4. Give people access
 - **Reviewers:** share the URL + the access code, OR from `/admin` create per-person magic
   invite links (they sign in and prefill identity; revocable).

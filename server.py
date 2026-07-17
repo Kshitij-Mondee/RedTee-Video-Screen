@@ -178,6 +178,79 @@ def _gapi(url: str, rng: str = ""):
     return urllib.request.urlopen(req, timeout=30)
 
 
+# ---------------- feedback reports -> Google Drive (write with the drive.file scope) ----------------
+def _reports_folder() -> str:
+    """Destination folder id for auto-saved reports (config: reports_drive_folder). Empty = off."""
+    return _folder_id(str(_conf().get("reports_drive_folder", "")))
+
+
+def _drive_find(name: str, folder_id: str) -> str:
+    """Id of an app-created file called <name> in <folder_id>, or '' - so we UPDATE in place
+    instead of piling up duplicates. drive.file scope only lists files this app created, which
+    is exactly the set we want to overwrite."""
+    safe = name.replace("\\", "").replace("'", "")
+    q = urllib.parse.quote(f"name = '{safe}' and '{folder_id}' in parents and trashed = false")
+    url = (f"https://www.googleapis.com/drive/v3/files?q={q}"
+           f"&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=1")
+    with _gapi(url) as r:
+        files = json.loads(r.read().decode("utf-8")).get("files", [])
+    return files[0]["id"] if files else ""
+
+
+def _drive_upload(name: str, mime: str, data: bytes, folder_id: str) -> str:
+    """Create or overwrite <name> in <folder_id> via the Drive upload endpoint. Returns file id."""
+    tok = _oauth_access_token()
+    existing = _drive_find(name, folder_id)
+    if existing:                                        # overwrite the content in place (PATCH media)
+        url = (f"https://www.googleapis.com/upload/drive/v3/files/{urllib.parse.quote(existing)}"
+               f"?uploadType=media&supportsAllDrives=true")
+        req = urllib.request.Request(url, data=data, method="PATCH",
+                                     headers={"Authorization": "Bearer " + tok, "Content-Type": mime})
+        with urllib.request.urlopen(req, timeout=60):
+            return existing
+    boundary = "redtee" + secrets.token_hex(12)
+    b = boundary.encode()
+    body = (b"--" + b + b"\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"
+            + json.dumps({"name": name, "parents": [folder_id]}).encode()
+            + b"\r\n--" + b + b"\r\nContent-Type: " + mime.encode() + b"\r\n\r\n"
+            + data + b"\r\n--" + b + b"--")
+    url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true"
+    req = urllib.request.Request(url, data=body, method="POST",
+                                 headers={"Authorization": "Bearer " + tok,
+                                          "Content-Type": f"multipart/related; boundary={boundary}"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read().decode("utf-8")).get("id", "")
+
+
+def _push_video_reports(video_id: str, title: str = "") -> bool:
+    """Save this video's feedback to the configured Drive folder: an HTML report, a raw-JSON
+    dump, and the org-wide CSV. Best-effort: any Drive error is swallowed so a review submission
+    (or the admin backfill) is never blocked by a Drive hiccup."""
+    folder = _reports_folder()
+    if not folder or not _oauth_ready():
+        return False
+    vid = _drive_id(video_id) or video_id
+    if not vid:
+        return False
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", (title or vid)).strip("_")[:80] or vid
+    try:
+        _drive_upload(f"{safe}.report.html", "text/html; charset=utf-8",
+                      _build_report(vid, title).encode("utf-8"), folder)
+        dump = json.dumps({"video_id": vid, "title": title, "reviews": _reviews_for(vid),
+                           "generated": time.strftime("%Y-%m-%dT%H:%M:%S")}, ensure_ascii=False, indent=1)
+        _drive_upload(f"{safe}.reviews.json", "application/json; charset=utf-8", dump.encode("utf-8"), folder)
+        _drive_upload("all_reviews.csv", "text/csv; charset=utf-8", _export_csv().encode("utf-8"), folder)
+        return True
+    except Exception:  # noqa: BLE001 - never let a Drive failure break the caller
+        return False
+
+
+def _push_video_reports_async(video_id: str, title: str = ""):
+    if _reports_folder() and _oauth_ready():
+        import threading
+        threading.Thread(target=_push_video_reports, args=(video_id, title), daemon=True).start()
+
+
 def _local_videos() -> list:
     out = []
     if VIDEO_DIR.is_dir():
@@ -1525,7 +1598,10 @@ class H(BaseHTTPRequestHandler):
             state = secrets.token_urlsafe(16)
             url = ("https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({
                 "client_id": o["client_id"], "redirect_uri": redirect, "response_type": "code",
-                "scope": "https://www.googleapis.com/auth/drive.readonly",
+                # drive.readonly: list + stream the video library; drive.file: write feedback
+                # reports into the folder the app creates files in (least-privilege write).
+                "scope": "https://www.googleapis.com/auth/drive.readonly "
+                         "https://www.googleapis.com/auth/drive.file",
                 "access_type": "offline", "prompt": "consent", "state": state}))
             self.send_response(302)
             self.send_header("Set-Cookie", f"rt_dstate={state}; HttpOnly; Path=/; Max-Age=600; SameSite=Lax" + self._secure())
@@ -1783,6 +1859,12 @@ class H(BaseHTTPRequestHandler):
                 c["drive_folder_id"] = fol
             if str(p.get("api_key", "")).strip():
                 c["drive_api_key"] = str(p["api_key"]).strip()
+            if "reports_folder" in p:                    # destination folder for auto-saved reports
+                rf_raw = str(p.get("reports_folder", "")).strip()
+                rf = _folder_id(rf_raw)
+                if rf_raw and not rf:
+                    return self._send(400, json.dumps({"ok": False, "error": "reports folder: paste a Drive folder link (/folders/<id>)"}))
+                c["reports_drive_folder"] = rf           # empty clears it (turns the feature off)
             if "admin_emails" in p:
                 c["admin_emails"] = [e.strip().lower() for e in str(p.get("admin_emails", "")).split(",") if e.strip()]
             if str(p.get("oauth_client_id", "")).strip() or str(p.get("oauth_client_secret", "")).strip():
@@ -1804,7 +1886,7 @@ class H(BaseHTTPRequestHandler):
                 c["videos"] = vids
                 if bad:
                     c.setdefault("_note", f"{bad} pasted line(s) were not /file/d/ links and were ignored")
-            _any = ("admin_emails" in p or fol or links or str(p.get("api_key", "")).strip()
+            _any = ("admin_emails" in p or fol or links or "reports_folder" in p or str(p.get("api_key", "")).strip()
                     or str(p.get("oauth_client_id", "")).strip() or str(p.get("oauth_client_secret", "")).strip())
             if not _any:
                 return self._send(400, json.dumps({"ok": False, "error": "paste a folder link, video links, an API key, or OAuth credentials"}))
@@ -1813,6 +1895,25 @@ class H(BaseHTTPRequestHandler):
             out = _videos(force=True)
             return self._send(200, json.dumps({"ok": True, "found": len(out["videos"]),
                                                "mode": out["mode"], "error": out.get("error", "")}))
+        if self.path == "/api/push-reports":
+            if not self._is_admin():
+                return self._send(403, json.dumps({"ok": False, "error": "admin code required"}))
+            if not _reports_folder():
+                return self._send(400, json.dumps({"ok": False, "error": "set a reports folder link first (reports_drive_folder)"}))
+            if not _oauth_ready():
+                return self._send(400, json.dumps({"ok": False, "error": "connect Google (write access) first"}))
+            seen = {}                                    # unique video_id -> a title, from stored reviews
+            if REVIEW_DIR.is_dir():
+                for f in REVIEW_DIR.glob("*/*.json"):
+                    try:
+                        r = json.loads(f.read_text(encoding="utf-8"))
+                    except (OSError, ValueError):
+                        continue
+                    v = r.get("video_id") or f.parent.name
+                    if v and (v not in seen or r.get("video_title")):
+                        seen[v] = r.get("video_title") or seen.get(v, "")
+            pushed = sum(1 for v, t in seen.items() if _push_video_reports(v, t))
+            return self._send(200, json.dumps({"ok": True, "pushed": pushed, "videos": len(seen)}))
         if self.path != "/api/review":
             return self._send(404, json.dumps({"error": "not found"}))
         try:
@@ -1823,6 +1924,8 @@ class H(BaseHTTPRequestHandler):
         if vid_chk and not _user_can_watch(vid_chk, self._email(), self._is_admin()):
             return self._send(403, json.dumps({"ok": False, "error": "no access to this video"}))
         res = _save_review(payload)
+        if res.get("ok"):                               # mirror the feedback to Drive (non-blocking)
+            _push_video_reports_async(str(payload.get("video_id", "")), str(payload.get("video_title", "")))
         return self._send(200 if res.get("ok") else 400, json.dumps(res))
 
 

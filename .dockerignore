@@ -1,0 +1,32 @@
+# Keep the build context lean and never ship state/secrets into the image.
+# (The Dockerfile only COPYs server.py, export_sidecar.py, config.example.json.)
+
+# version control / tooling
+.git/
+.gitignore
+.kiro/
+
+# python caches
+__pycache__/
+*.pyc
+*.pyo
+
+# runtime state (must never be baked into the image - lives on the /data volume)
+config.json
+reviews/
+videos/
+bundles/
+sessions.json
+invites.json
+*.review.json
+
+# local test scratch
+_datatest/
+_smoke.py
+
+# docs / platform configs (not needed inside the image)
+README.md
+DEPLOY.md
+render.yaml
+railway.json
+fly.toml
