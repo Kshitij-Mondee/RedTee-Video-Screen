@@ -18,8 +18,12 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CONF_PATH = HERE / "config.json"
-REVIEW_DIR = HERE / "reviews"
+# Persistent state lives in DATA_DIR (config, reviews, uploads, sessions, invites, bundles).
+# Defaults to the script folder for local runs; set REDTEE_DATA_DIR=/data in containers so the
+# code (in /app) and the mounted state volume (at /data) never shadow each other.
+DATA_DIR = Path(os.environ.get("REDTEE_DATA_DIR") or HERE)
+CONF_PATH = DATA_DIR / "config.json"
+REVIEW_DIR = DATA_DIR / "reviews"
 PORT = int(os.environ.get("REDTEE_REVIEW_PORT", "8712"))
 HOST = os.environ.get("REDTEE_REVIEW_HOST", "127.0.0.1")   # 0.0.0.0 for a central org deployment
 MAX_JSON_BODY = 1_000_000                                  # 1 MB cap on JSON POST bodies (DoS guard)
@@ -53,8 +57,8 @@ def _token(code: str) -> str:
     return hashlib.sha256((code + "|" + _salt()).encode()).hexdigest()[:40]
 
 
-INVITES_PATH = HERE / "invites.json"
-SESSIONS_PATH = HERE / "sessions.json"
+INVITES_PATH = DATA_DIR / "invites.json"
+SESSIONS_PATH = DATA_DIR / "sessions.json"
 
 
 def _sessions() -> dict:
@@ -132,7 +136,7 @@ def _collection_videos(col: dict) -> list:
     if c.get("drive_api_key"):
         return _list_drive_folder(fol, c["drive_api_key"])
     return _scrape_public_folder(fol)
-VIDEO_DIR = HERE / "videos"                      # server-hosted videos: the no-Drive-drama path
+VIDEO_DIR = DATA_DIR / "videos"                  # server-hosted videos: the no-Drive-drama path
 
 # ---------------- Google OAuth (the PROPER Drive connection) ----------------
 # One-time admin consent -> refresh token -> the server reads the folder with real
@@ -608,7 +612,7 @@ def _bundle_dirs() -> list:
     (point one at the render repo's render_out to index lesson bundles without pushing)."""
     c = _conf()
     dirs = c.get("bundle_dirs") or ["bundles"]
-    return [Path(d) if os.path.isabs(str(d)) else HERE / d for d in dirs]
+    return [Path(d) if os.path.isabs(str(d)) else DATA_DIR / d for d in dirs]
 
 
 def _norm_title(t: str) -> str:
@@ -1738,7 +1742,7 @@ class H(BaseHTTPRequestHandler):
                 assert isinstance(d.get("spans"), list) and isinstance(d.get("svgs"), dict)
             except (ValueError, AssertionError):
                 return self._send(400, json.dumps({"ok": False, "error": "not a valid .review.json sidecar"}))
-            bdir = HERE / "bundles"
+            bdir = DATA_DIR / "bundles"
             bdir.mkdir(parents=True, exist_ok=True)
             (bdir / f"{name}.review.json").write_bytes(raw)
             _BUNDLE_CACHE["idx"] = None
@@ -1823,6 +1827,7 @@ class H(BaseHTTPRequestHandler):
 
 
 def main():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     REVIEW_DIR.mkdir(parents=True, exist_ok=True)
     if not CONF_PATH.exists():
         CONF_PATH.write_text(json.dumps({
