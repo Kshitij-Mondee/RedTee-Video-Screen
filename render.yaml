@@ -1,0 +1,27 @@
+# Render Blueprint for the RedTee Screening Room.
+# Deploy: push this repo, then in Render: New -> Blueprint -> pick this repo.
+# Render reads this file, builds the Dockerfile, attaches the disk, and wires env vars.
+services:
+  - type: web
+    name: redtee-screening-room
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter                 # starter+ required for a persistent disk
+    healthCheckPath: /health
+    envVars:
+      - key: REDTEE_DATA_DIR
+        value: /data
+      - key: REDTEE_REVIEW_HOST
+        value: 0.0.0.0
+      - key: REDTEE_REVIEW_PORT
+        value: "8712"
+      # Access codes are marked sync:false so they are NOT stored in git -
+      # Render prompts you to enter them once in the dashboard.
+      - key: REDTEE_REVIEW_CODE
+        sync: false
+      - key: REDTEE_REVIEW_ADMIN_CODE
+        sync: false
+    disk:
+      name: redtee-data
+      mountPath: /data
+      sizeGB: 3                   # bump if you host uploaded videos on the server

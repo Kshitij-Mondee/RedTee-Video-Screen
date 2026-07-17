@@ -35,9 +35,13 @@ server uses to mark cookies `Secure`. No cert work needed on your side.
 
 ---
 
+> Config files are included in the repo: `railway.json` (Railway), `render.yaml` (Render
+> Blueprint), and `fly.toml` (Fly.io). Each platform picks up its own file automatically.
+
 ## 2A. Railway (simplest)
-1. **New Project → Deploy from GitHub repo** (or `railway init` with the CLI). Railway detects
-   the `Dockerfile` and builds it.
+1. **New Project → Deploy from GitHub repo** (or `railway init` with the CLI). Railway reads
+   `railway.json` (Dockerfile build + `/health` check) and builds the image. Volumes and
+   variables are set in the dashboard (steps 2–4 below).
 2. **Variables** tab → add `REDTEE_REVIEW_CODE`, `REDTEE_REVIEW_ADMIN_CODE`,
    `REDTEE_REVIEW_PORT=8712`. (`REDTEE_DATA_DIR` / `REDTEE_REVIEW_HOST` come from the Dockerfile.)
 3. **Volumes** → add a volume, mount path `/data`.
@@ -46,34 +50,30 @@ server uses to mark cookies `Secure`. No cert work needed on your side.
 5. Deploy. Open the generated `https://<app>.up.railway.app` and log in with the admin code at
    `/admin`.
 
-## 2B. Render
-1. **New → Web Service** → connect the repo → Environment: **Docker**.
-2. **Environment** → add `REDTEE_REVIEW_CODE`, `REDTEE_REVIEW_ADMIN_CODE`, `REDTEE_REVIEW_PORT=8712`.
-3. **Disks** → add a disk, mount path `/data` (size to fit uploaded videos if you use uploads).
-4. Render routes `443 → your container port`; ensure it targets `8712` (it reads `EXPOSE 8712`,
-   and `REDTEE_REVIEW_PORT=8712` keeps them aligned).
-5. Create Web Service. Visit the `https://<app>.onrender.com` URL and sign in at `/admin`.
+## 2B. Render (Blueprint - mostly automatic)
+1. **New → Blueprint** → connect the repo. Render reads `render.yaml` and provisions the web
+   service, the `/data` disk, and the non-secret env vars for you.
+2. Render will prompt for the two secret vars (`REDTEE_REVIEW_CODE`, `REDTEE_REVIEW_ADMIN_CODE`)
+   because they're marked `sync: false` — enter `MondeeAccess` and `RedTee_0806`.
+3. Apply. Visit the `https://<app>.onrender.com` URL and sign in at `/admin`.
+
+   (Manual alternative without the Blueprint: New → Web Service → Docker, then add the env vars
+   and a disk mounted at `/data` yourself; make sure the service targets port `8712`.)
 
 ## 2C. Fly.io
-1. `fly launch --no-deploy` (creates `fly.toml`; keep the Dockerfile).
-2. Edit `fly.toml` so the internal port matches:
-   ```toml
-   [http_service]
-     internal_port = 8712
-     force_https = true
+`fly.toml` is already in the repo (internal port 8712, HTTPS forced, `/health` check, and a
+`/data` mount). You only need to:
+1. Set the app name: edit `app = "redtee-screening-room"` in `fly.toml` to a unique name, or run
+   `fly launch --no-deploy` and let it fill that in (keep the existing Dockerfile + fly.toml).
+2. Create the volume (same region as the app) and set the secret codes:
    ```
-3. Create a volume and set secrets:
-   ```
-   fly volumes create redtee_data --size 3
+   fly volumes create redtee_data --size 3 --region iad
    fly secrets set REDTEE_REVIEW_CODE=MondeeAccess REDTEE_REVIEW_ADMIN_CODE=RedTee_0806
    ```
-4. Mount the volume in `fly.toml`:
-   ```toml
-   [mounts]
-     source = "redtee_data"
-     destination = "/data"
-   ```
-5. `fly deploy`. Open `https://<app>.fly.dev` and sign in at `/admin`.
+3. `fly deploy`. Open `https://<app>.fly.dev` and sign in at `/admin`.
+
+> Note: `fly.toml` sets `min_machines_running = 1` so the app doesn't cold-stop and drop the
+> in-memory video cache; lower it to 0 if you want scale-to-zero and don't mind first-hit latency.
 
 ---
 

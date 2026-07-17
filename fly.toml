@@ -1,0 +1,46 @@
+# Fly.io config for the RedTee Screening Room.
+# Deploy:
+#   fly launch --no-deploy            # if you don't have an app yet (keep this Dockerfile)
+#   fly volumes create redtee_data --size 3 --region <same-region-as-app>
+#   fly secrets set REDTEE_REVIEW_CODE=MondeeAccess REDTEE_REVIEW_ADMIN_CODE=RedTee_0806
+#   fly deploy
+# Set `app` to your app name (fly launch fills this in for you).
+app = "redtee-screening-room"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  REDTEE_DATA_DIR = "/data"
+  REDTEE_REVIEW_HOST = "0.0.0.0"
+  REDTEE_REVIEW_PORT = "8712"
+  # Access codes are set via `fly secrets set` (not here) so they stay out of git.
+
+[http_service]
+  internal_port = 8712
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+[[http_service.checks]]
+  method = "get"
+  path = "/health"
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+
+# Persistent state (config, reviews, uploads, bundles, sessions, invites) lives here.
+[mounts]
+  source = "redtee_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
