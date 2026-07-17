@@ -1,0 +1,15 @@
+{
+ "_how": "Copy to config.json. Users sign in on the landing (Google or access code); admins = admin_emails or admin_code. Collections = Drive folders or uploads, public or private. Manage at /admin. bundle_dirs: relative to this folder, absolute paths allowed (e.g. the render repo's render_out).",
+ "admin_emails": ["you@example.com"],
+ "access_code": "",
+ "admin_code": "change-me-admin",
+ "google_oauth": {"client_id": "", "client_secret": "", "refresh_token": ""},
+ "drive_api_key": "",
+ "collections": [
+  {"id": "col_main", "name": "RedTee lessons", "type": "drive",
+   "folder_id": "PASTE_DRIVE_FOLDER_ID", "visibility": "public", "allowed_emails": []}
+ ],
+ "bundle_dirs": ["bundles"],
+ "videos": [],
+ "video_bundles": {}
+}

@@ -1,0 +1,6 @@
+__pycache__/
+reviews/
+videos/
+sessions.json
+invites.json
+config.json
