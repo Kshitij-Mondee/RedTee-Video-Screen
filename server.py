@@ -2108,105 +2108,236 @@ def main():
 
 
 ADMIN_PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Screening room - admin</title><script>(function(){var t;try{t=localStorage.getItem('rt_theme')}catch(e){}
+<title>RedTee - Admin console</title><script>(function(){var t;try{t=localStorage.getItem('rt_theme')}catch(e){}
 if(!t)t=window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
 document.documentElement.setAttribute('data-theme',t)})()</script><style>
-:root{--bg:#0a0b0e;--s1:#141419;--s0:#0e0e12;--ink:#f2f2f5;--muted:#848791;--red:#e5484d;--gold:#f5c96b;--ok:#3dd68c;--hair:#ffffff12;color-scheme:dark}
-[data-theme="light"]{--bg:#f5f5f7;--s1:#ffffff;--s0:#eceef2;--ink:#1b1e28;--muted:#5d6370;--red:#d63a40;--gold:#a67c1b;--ok:#1f9e63;--hair:#00000014;color-scheme:light}
-body{transition:background-color .3s,color .3s}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14.5px/1.6 Inter,"Segoe UI",system-ui,sans-serif;padding:34px}
-.wrap{max-width:1180px;margin:0 auto}
-h1{font-size:23px;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 26px;font-size:13px}
-h2{font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);margin:30px 0 12px}
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.kpi{background:var(--s1);border:1px solid var(--hair);border-radius:16px;padding:18px 22px}
-.kpi .n{font-size:30px;font-weight:800}.kpi .l{color:var(--muted);font-size:12px}
-table{border-collapse:collapse;width:100%;font-size:13.5px;background:var(--s1);border-radius:14px;overflow:hidden}
-th,td{border-bottom:1px solid var(--hair);padding:10px 14px;text-align:left;vertical-align:top}
-th{background:var(--s0);color:var(--muted);font-size:11px;letter-spacing:1px;text-transform:uppercase}
+:root{
+  --bg:#0a0a0d;--s0:#0e0e12;--s1:#141419;--s2:#1a1a21;--s3:#212129;
+  --ink:#f2f2f5;--ink2:#b9bcc6;--muted:#848791;--faint:#6b6e78;
+  --red:#e5484d;--red-hi:#ff7d81;--red-deep:#b52d33;--gold:#f5c96b;--gold-dim:#8a7442;--ok:#3dd68c;
+  --hair:#ffffff12;--hair-hi:#ffffff24;--glow:rgba(229,72,77,.20);--glow-soft:rgba(229,72,77,.09);
+  --acc-bd:#5c2226;--bad-ink:#ff9ea1;
+  --nav-bg:rgba(10,10,13,.78);--glowA:#15161d;--glowB:#100d14;
+  --sh2:0 8px 30px rgba(0,0,0,.45);
+  --spring:cubic-bezier(.34,1.56,.64,1);--ease:cubic-bezier(.22,.61,.36,1);
+  color-scheme:dark}
+[data-theme="light"]{
+  --bg:#f5f5f7;--s0:#eceef2;--s1:#ffffff;--s2:#f2f3f6;--s3:#e4e6ec;
+  --ink:#1b1e28;--ink2:#3d4250;--muted:#5d6370;--faint:#9aa0ac;
+  --red:#d63a40;--red-hi:#c92e35;--red-deep:#a92a30;--gold:#a67c1b;--gold-dim:#d9c08a;--ok:#1f9e63;
+  --hair:#00000012;--hair-hi:#00000024;--glow:rgba(214,58,64,.18);--glow-soft:rgba(214,58,64,.08);
+  --acc-bd:#f2c6c8;--bad-ink:#b03a3f;
+  --nav-bg:rgba(248,248,250,.8);--glowA:#e9e9f1;--glowB:#efe9ef;
+  --sh2:0 8px 28px rgba(30,34,50,.12);
+  color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 Inter,"Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;transition:background-color .3s,color .3s}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(900px 480px at 80% -8%,var(--glowA) 0%,transparent 60%),
+             radial-gradient(700px 500px at -10% 108%,var(--glowB) 0%,transparent 55%)}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes toastin{0%{opacity:0;transform:translate(-50%,26px) scale(.94)}100%{opacity:1;transform:translate(-50%,0)}}
+.icn{vertical-align:-3px}
+.top{display:flex;align-items:center;gap:14px;padding:15px 34px;position:sticky;top:0;z-index:50;
+  background:var(--nav-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--hair)}
+.logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--red),var(--red-deep));
+  display:grid;place-items:center;font-weight:800;font-size:16px;color:#fff;box-shadow:0 4px 18px var(--glow)}
+.brand h1{font-size:15.5px;margin:0;font-weight:750}
+.brand .sub{color:var(--muted);font-size:11px;letter-spacing:1.2px;text-transform:uppercase;margin-top:1px}
+.sp{flex:1}
+.btn{background:var(--s1);border:1px solid var(--hair);color:var(--ink);border-radius:9px;padding:9px 15px;
+  font-size:13px;font-weight:650;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;
+  transition:transform .18s var(--spring),border-color .22s,background .22s,box-shadow .25s}
+.btn:hover{border-color:var(--hair-hi);background:var(--s2);transform:translateY(-1px);box-shadow:var(--sh2)}
+.btn:active{transform:scale(.965)}
+.btn.primary{background:linear-gradient(135deg,var(--red),var(--red-deep));border-color:transparent;color:#fff;box-shadow:0 4px 18px var(--glow)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--ink2)}
+.btn.ghost:hover{color:var(--ink);background:var(--s1);box-shadow:none}
+.btn.mini{padding:5px 11px;font-size:12px;border-radius:8px}
+.btn.danger:hover{color:var(--bad-ink);background:var(--glow-soft)}
+.iconbtn{width:38px;height:38px;border-radius:11px;background:var(--s1);border:1px solid var(--hair);color:var(--ink2);
+  display:grid;place-items:center;cursor:pointer;transition:transform .18s var(--spring),border-color .22s,color .22s}
+.iconbtn:hover{border-color:var(--hair-hi);color:var(--ink);transform:translateY(-1px)}
+.wrap{max-width:1180px;margin:0 auto;padding:30px 34px 120px}
+.pagehead{margin:6px 0 22px;animation:rise .4s var(--ease) both}
+.pagehead h2{font-size:clamp(24px,3vw,34px);margin:0;font-weight:800;letter-spacing:-.5px}
+.pagehead h2 em{font-style:normal;background:linear-gradient(100deg,var(--red-hi),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+.pagehead p{color:var(--muted);margin:5px 0 0;font-size:13.5px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:8px}
+.kpi{background:var(--s1);border:1px solid var(--hair);border-radius:16px;padding:18px 20px;display:flex;gap:14px;
+  align-items:center;animation:rise .45s var(--ease) both;transition:transform .25s var(--spring),border-color .25s}
+.kpi:hover{transform:translateY(-2px);border-color:var(--hair-hi)}
+.kpi .ic{flex:none;width:40px;height:40px;border-radius:11px;background:var(--glow-soft);color:var(--red-hi);
+  display:grid;place-items:center;border:1px solid var(--acc-bd)}
+.kpi .n{font-size:26px;font-weight:800;line-height:1.1;letter-spacing:-.5px}
+.kpi .l{color:var(--muted);font-size:11.5px;letter-spacing:.4px}
+.panel{background:var(--s1);border:1px solid var(--hair);border-radius:18px;margin-top:22px;overflow:hidden;animation:rise .45s var(--ease) both}
+.phead{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--hair)}
+.phead h3{font-size:11.5px;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);margin:0;font-weight:750}
+.phead .pnote{color:var(--faint);font-size:12px;margin-left:auto}
+.pbody{padding:0}
+.pbody.pad{padding:18px 22px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{border-bottom:1px solid var(--hair);padding:12px 16px;text-align:left;vertical-align:top}
+th{color:var(--faint);font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;font-weight:700;padding:10px 16px}
+th:first-child,td:first-child{padding-left:22px}th:last-child,td:last-child{padding-right:22px}
 tr:last-child td{border-bottom:none}
-.pill{display:inline-block;background:var(--s0);border:1px solid var(--hair);border-radius:14px;padding:2px 10px;font-size:11.5px;color:var(--muted);margin:1px 3px 1px 0}
-.pill.bad{color:#ff9ea1;border-color:#5c2226}.pill.good{color:var(--ok)}
+tbody tr{transition:background .15s}tbody tr:hover{background:var(--s0)}
+.vtitle{font-weight:700;font-size:14px}
+.note{color:var(--faint);font-size:12px}
+.star{color:var(--gold);font-weight:700;white-space:nowrap}
+.pill{display:inline-block;background:var(--s0);border:1px solid var(--hair);border-radius:14px;padding:2px 10px;
+  font-size:11.5px;color:var(--muted);margin:2px 4px 2px 0;white-space:nowrap}
+.pill.bad{color:var(--bad-ink);border-color:var(--acc-bd);background:var(--glow-soft)}
+.pill.good{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,transparent)}
+.emptybox{border:1px dashed var(--hair-hi);border-radius:13px;margin:18px 22px;padding:26px;text-align:center;
+  color:var(--faint);font-size:13px;line-height:1.7}
 a{color:var(--gold);text-decoration:none}a:hover{text-decoration:underline}
-.star{color:var(--gold)}
-.inv{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-input{background:var(--s0);border:1px solid var(--hair);border-radius:9px;color:var(--ink);padding:9px 12px;font-size:13px}
-button{background:linear-gradient(135deg,var(--red),#b52d33);border:none;border-radius:9px;color:#fff;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer}
-button.ghost{background:none;border:1px solid var(--hair);color:var(--muted)}
-.link{font-family:ui-monospace,monospace;font-size:12px;background:var(--s0);border:1px solid var(--hair);border-radius:8px;padding:6px 10px;word-break:break-all}
-.note{color:var(--muted);font-size:12px}
-</style></head><body><div class="wrap">
-<h1>Screening room - admin <button onclick="(function(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='light'?'dark':'light';h.setAttribute('data-theme',t);try{localStorage.setItem('rt_theme',t)}catch(e){}})()" style="float:right;background:none;border:1px solid var(--hair);border-radius:9px;color:var(--muted);padding:6px 12px;font-size:12px;cursor:pointer"><svg class="icn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg> / <svg class="icn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg> theme</button></h1><p class="sub"><a href="/">&larr; back to the lobby</a> &middot; <a href="/api/export.csv">export all reviews (CSV)</a></p>
-<div class="cards" id="kpis"></div>
-<h2>Videos</h2><div id="vids"></div>
-<h2>Slide hotspots (most flagged moments)</h2><div id="hot"></div>
-<h2>Most requested changes</h2><div id="chg"></div>
-<h2>Collections (who sees what)</h2>
-<p class="note">A collection is a Drive folder (or the uploads bucket). <b>Public</b> = every signed-in person sees it. <b>Private</b> = only the emails you assign.</p>
-<div class="inv"><input id="cn" placeholder="collection name"><input id="cf" placeholder="Drive folder link" style="min-width:280px"><button onclick="mkCol()">Add collection</button></div>
-<div id="cols"></div>
-<h2>Admin emails</h2>
-<p class="note">These emails get admin powers when they sign in with Google. Comma-separated.</p>
-<div class="inv"><input id="adme" style="min-width:380px" placeholder="you@company.com, colleague@company.com"><button onclick="saveAdmins()">Save</button></div>
-<h2>Reviewer invite links</h2>
-<div class="inv"><input id="in" placeholder="name"><input id="ir" placeholder="role / team"><input id="ie" placeholder="email (optional)"><button onclick="mkInvite()">Create link</button></div>
-<div id="invites"></div>
+.formrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.tx{background:var(--s0);border:1px solid var(--hair);border-radius:9px;color:var(--ink);padding:10px 13px;
+  font-size:13px;transition:border-color .22s,box-shadow .22s}
+.tx:focus{outline:none;border-color:var(--red);box-shadow:0 0 0 4px var(--glow-soft)}
+.tx::placeholder{color:var(--faint)}
+.tx.inline{padding:7px 11px;font-size:12.5px}
+.vispill{display:inline-flex;align-items:center;gap:7px;border-radius:20px;padding:4px 13px;font-size:12px;font-weight:650;
+  cursor:pointer;border:1px solid var(--hair);background:var(--s0);color:var(--muted);transition:all .2s}
+.vispill:hover{border-color:var(--hair-hi);color:var(--ink)}
+.vispill.public{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,transparent)}
+.vispill.private{color:var(--gold);border-color:var(--gold-dim)}
+.invite{display:flex;align-items:center;gap:12px;padding:13px 22px;border-bottom:1px solid var(--hair);flex-wrap:wrap}
+.invite:last-child{border-bottom:none}
+.invite .who{min-width:180px}
+.invite .who b{font-size:13.5px}
+.codechip{display:flex;align-items:center;gap:10px;background:var(--s0);border:1px dashed var(--hair-hi);border-radius:9px;
+  padding:7px 12px;cursor:pointer;flex:1;min-width:240px;transition:border-color .2s}
+.codechip:hover{border-color:var(--red)}
+.codechip code{font:11.5px ui-monospace,monospace;color:var(--ink2);word-break:break-all;flex:1}
+.codechip i{font-style:normal;font-size:9.5px;letter-spacing:1.4px;font-weight:800;color:var(--red-hi)}
+#toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:var(--s2);border:1px solid var(--hair-hi);
+  color:var(--ink);border-radius:12px;padding:12px 20px;font-size:13.5px;box-shadow:var(--sh2);display:none;z-index:99;
+  animation:toastin .35s var(--spring) both}
+#toast.bad{border-color:var(--acc-bd);color:var(--bad-ink)}
+@media (max-width:760px){.wrap{padding:22px 16px 100px}.top{padding:13px 16px}th,td{padding:10px 10px}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001s !important;transition-duration:.001s !important}}
+</style></head><body>
+<div class="top">
+  <div class="logo">R</div>
+  <div class="brand"><h1>Admin console</h1><div class="sub">RedTee Screening Room</div></div>
+  <div class="sp"></div>
+  <a class="btn ghost" href="/"><svg class="icn" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> Lobby</a>
+  <a class="btn ghost" href="/api/export.csv"><svg class="icn" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Export CSV</a>
+  <button class="iconbtn themebtn" onclick="toggleTheme()" title="light / dark"></button>
+</div>
+<div class="wrap">
+<div class="pagehead"><h2>The numbers, <em>honestly</em></h2><p>Every review, verdict and flagged moment across the library - plus who gets to see what.</p></div>
+<div class="kpis" id="kpis"></div>
+
+<div class="panel" style="animation-delay:.05s"><div class="phead"><h3>Videos</h3><span class="pnote">click report for the full write-up</span></div><div class="pbody" id="vids"></div></div>
+<div class="panel" style="animation-delay:.1s"><div class="phead"><h3>Slide hotspots</h3><span class="pnote">most flagged moments</span></div><div class="pbody" id="hot"></div></div>
+<div class="panel" style="animation-delay:.15s"><div class="phead"><h3>Most requested changes</h3></div><div class="pbody pad" id="chg"></div></div>
+
+<div class="panel" style="animation-delay:.2s"><div class="phead"><h3>Collections</h3><span class="pnote">who sees what - public = every signed-in person, private = only assigned emails</span></div>
+  <div class="pbody pad" style="border-bottom:1px solid var(--hair)"><div class="formrow">
+    <input class="tx" id="cn" placeholder="Collection name" style="flex:1;min-width:160px">
+    <input class="tx" id="cf" placeholder="Drive folder link" style="flex:2;min-width:260px">
+    <button class="btn primary" onclick="mkCol()">Add collection</button>
+  </div></div>
+  <div class="pbody" id="cols"></div></div>
+
+<div class="panel" style="animation-delay:.25s"><div class="phead"><h3>Admin emails</h3><span class="pnote">these accounts get admin powers on Google sign-in</span></div>
+  <div class="pbody pad"><div class="formrow">
+    <input class="tx" id="adme" style="flex:1;min-width:300px" placeholder="you@company.com, colleague@company.com">
+    <button class="btn primary" onclick="saveAdmins()">Save</button>
+  </div></div></div>
+
+<div class="panel" style="animation-delay:.3s"><div class="phead"><h3>Reviewer invite links</h3><span class="pnote">the link signs the reviewer in and fills their identity</span></div>
+  <div class="pbody pad" style="border-bottom:1px solid var(--hair)"><div class="formrow">
+    <input class="tx" id="in" placeholder="Name" style="flex:1;min-width:130px">
+    <input class="tx" id="ir" placeholder="Role / team" style="flex:1;min-width:130px">
+    <input class="tx" id="ie" placeholder="Email (optional)" style="flex:1;min-width:170px">
+    <button class="btn primary" onclick="mkInvite()">Create link</button>
+  </div></div>
+  <div class="pbody" id="invites"></div></div>
+</div>
+<div id="toast"></div>
 <script>
 const $=s=>document.querySelector(s);
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.className=bad?'bad':'';t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600)}
+function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='light'?'dark':'light';
+h.setAttribute('data-theme',t);try{localStorage.setItem('rt_theme',t)}catch(e){}paintTheme(t)}
+function paintTheme(t){document.querySelectorAll('.themebtn').forEach(b=>b.innerHTML=t==='light'
+ ?'<svg class="icn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>'
+ :'<svg class="icn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>')}
+paintTheme(document.documentElement.getAttribute('data-theme'));
+const KICONS={
+ reviews:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+ videos:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="15" height="16" rx="2"/><path d="m22 8-5 4 5 4z"/></svg>',
+ people:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+ flag:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"/></svg>'};
 async function load(){
   const st=await(await fetch('/api/stats')).json();
-  $('#kpis').innerHTML=[['reviews',st.totals.reviews],['videos reviewed',st.totals.videos],['reviewers',st.totals.reviewers]]
-    .map(([l,n])=>'<div class="kpi"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>').join('');
-  $('#vids').innerHTML='<table><tr><th>video</th><th>reviews</th><th>avg</th><th>verdicts</th><th>top issues</th><th></th></tr>'+
-    st.videos.map(v=>'<tr><td><b>'+esc(v.title)+'</b><div class="note">'+v.moments+' flagged moments</div></td>'+
-      '<td>'+v.count+'</td><td class="star">'+(v.avg?v.avg+' ★':'-')+'</td>'+
-      '<td>'+Object.entries(v.verdicts).map(([k,n])=>'<span class="pill'+(/must|worth/.test(k)?' good':/not share|needs work/.test(k)?' bad':'')+'">'+esc(k)+' &times;'+n+'</span>').join('')+'</td>'+
-      '<td>'+v.top_off.map(([k,n])=>'<span class="pill bad">'+esc(k)+' &times;'+n+'</span>').join('')+'</td>'+
-      '<td><a href="/api/report?video='+encodeURIComponent(v.video_id)+'&title='+encodeURIComponent(v.title)+'" target="_blank">report</a></td></tr>').join('')+'</table>';
-  $('#hot').innerHTML=st.hotspots.length?'<table><tr><th>video</th><th>slide</th><th>flags</th><th>sample notes</th></tr>'+
+  const flagged=(st.hotspots||[]).reduce((a,h)=>a+(h.count||0),0);
+  $('#kpis').innerHTML=[
+    ['reviews',st.totals.reviews,KICONS.reviews],
+    ['videos reviewed',st.totals.videos,KICONS.videos],
+    ['reviewers',st.totals.reviewers,KICONS.people],
+    ['flagged moments',flagged,KICONS.flag]
+  ].map(([l,n,ic],i)=>'<div class="kpi" style="animation-delay:'+(i*60)+'ms"><span class="ic">'+ic+'</span><div><div class="n">'+n+'</div><div class="l">'+l+'</div></div></div>').join('');
+  $('#vids').innerHTML=st.videos.length?'<table><tr><th>Video</th><th>Reviews</th><th>Avg</th><th>Verdicts</th><th>Top issues</th><th></th></tr>'+
+    st.videos.map(v=>'<tr><td><div class="vtitle">'+esc(v.title)+'</div><div class="note">'+v.moments+' flagged moment'+(v.moments===1?'':'s')+'</div></td>'+
+      '<td>'+v.count+'</td><td class="star">'+(v.avg?v.avg+' &#9733;':'<span class="note">-</span>')+'</td>'+
+      '<td>'+(Object.entries(v.verdicts).map(([k,n])=>'<span class="pill'+(/must|worth/.test(k)?' good':/not share|needs work/.test(k)?' bad':'')+'">'+esc(k)+' &times;'+n+'</span>').join('')||'<span class="note">-</span>')+'</td>'+
+      '<td>'+(v.top_off.map(([k,n])=>'<span class="pill bad">'+esc(k)+' &times;'+n+'</span>').join('')||'<span class="note">-</span>')+'</td>'+
+      '<td><a class="btn ghost mini" href="/api/report?video='+encodeURIComponent(v.video_id)+'&title='+encodeURIComponent(v.title)+'" target="_blank">Report</a></td></tr>').join('')+'</table>'
+    :'<div class="emptybox">No reviews yet. Once your first screening gets rated, per-video numbers land here.</div>';
+  $('#hot').innerHTML=st.hotspots.length?'<table><tr><th>Video</th><th>Slide</th><th>Flags</th><th>Sample notes</th></tr>'+
     st.hotspots.map(h=>'<tr><td>'+esc(h.video)+'</td><td><b>'+esc(h.beat_id)+'</b></td><td>'+h.count+'</td><td class="note">'+h.notes.map(esc).join('<br>')+'</td></tr>').join('')+'</table>'
-    :'<p class="note">No slide-mapped moments yet.</p>';
-  $('#chg').innerHTML=st.top_changes.length?st.top_changes.map(([k,n])=>'<span class="pill">'+esc(k)+' &times;'+n+'</span>').join(' '):'<p class="note">Nothing yet.</p>';
+    :'<div class="emptybox">No slide-mapped moments yet. When reviewers flag a timestamp, the matching slide shows up here.</div>';
+  $('#chg').innerHTML=st.top_changes.length?st.top_changes.map(([k,n])=>'<span class="pill">'+esc(k)+' &times;'+n+'</span>').join(' '):'<span class="note">Nothing yet.</span>';
   loadInvites(); loadCols();
 }
 function esc(t){const d=document.createElement('i');d.textContent=t==null?'':String(t);return d.innerHTML}
 async function loadInvites(){
   const d=await(await fetch('/api/invites')).json();
-  $('#invites').innerHTML=(d.invites||[]).map(i=>'<p><b>'+esc(i.name)+'</b> <span class="note">'+esc(i.role||'')+' '+esc(i.email||'')+' &middot; '+esc(i.created)+'</span><br>'+
-    '<span class="link">'+location.origin+'/?invite='+i.token+'</span> '+
-    '<button class="ghost" onclick="navigator.clipboard.writeText(location.origin+\'/?invite=\'+\''+i.token+'\');this.textContent=\'copied\'">copy</button> '+
-    '<button class="ghost" onclick="revoke(\''+i.token+'\')">revoke</button></p>').join('')||'<p class="note">No invites yet - create one above; the link signs the reviewer in AND fills their identity.</p>';
+  $('#invites').innerHTML=(d.invites||[]).map(i=>'<div class="invite"><div class="who"><b>'+esc(i.name)+'</b><div class="note">'+esc(i.role||'')+(i.email?' &middot; '+esc(i.email):'')+' &middot; '+esc(i.created)+'</div></div>'+
+    '<span class="codechip" onclick="navigator.clipboard.writeText(location.origin+\'/?invite='+i.token+'\');this.querySelector(\'i\').textContent=\'copied!\'"><code>'+location.origin+'/?invite='+i.token+'</code><i>COPY</i></span>'+
+    '<button class="btn ghost mini danger" onclick="revoke(\''+i.token+'\')">Revoke</button></div>').join('')
+    ||'<div class="emptybox">No invites yet - create one above. The link signs the reviewer in and fills their identity automatically.</div>';
 }
 async function mkCol(){
   const r=await(await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name:$('#cn').value,folder:$('#cf').value})})).json();
-  if(r.ok){$('#cn').value='';$('#cf').value='';loadCols()}else alert(r.error);
+  if(r.ok){$('#cn').value='';$('#cf').value='';toast('Collection added');loadCols()}else toast(r.error||'failed',true);
 }
 async function loadCols(){
   const d=await(await fetch('/api/collections')).json();
-  $('#cols').innerHTML='<table><tr><th>collection</th><th>type</th><th>visibility</th><th>assigned emails (private only)</th><th></th></tr>'+
-    (d.collections||[]).map(c=>'<tr><td><b>'+esc(c.name)+'</b></td><td>'+esc(c.type)+'</td>'+
-      '<td><button class="ghost" onclick="setVis(\''+c.id+'\',\''+(c.visibility==='public'?'private':'public')+'\')">'+
-      (c.visibility==='public'?'<svg class="icn" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg> public':'<svg class="icn" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> private')+'</button></td>'+
-      '<td>'+(c.visibility==='private'?'<input style="min-width:260px" value="'+esc((c.allowed_emails||[]).join(', '))+'" onchange="setEmails(\''+c.id+'\',this.value)">':'<span class="note">everyone signed in</span>')+'</td>'+
-      '<td>'+(c.id!=='col_uploads'?'<button class="ghost" onclick="delCol(\''+c.id+'\')">remove</button>':'')+'</td></tr>').join('')+'</table>';
+  $('#cols').innerHTML='<table><tr><th>Collection</th><th>Type</th><th>Visibility</th><th>Assigned emails (private only)</th><th></th></tr>'+
+    (d.collections||[]).map(c=>'<tr><td><div class="vtitle" style="font-size:13.5px">'+esc(c.name)+'</div></td><td><span class="pill">'+esc(c.type)+'</span></td>'+
+      '<td><button class="vispill '+c.visibility+'" title="click to toggle" onclick="setVis(\''+c.id+'\',\''+(c.visibility==='public'?'private':'public')+'\')">'+
+      (c.visibility==='public'
+        ?'<svg class="icn" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg> public'
+        :'<svg class="icn" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> private')+'</button></td>'+
+      '<td>'+(c.visibility==='private'?'<input class="tx inline" style="min-width:250px;width:100%" value="'+esc((c.allowed_emails||[]).join(', '))+'" onchange="setEmails(\''+c.id+'\',this.value)">':'<span class="note">everyone signed in</span>')+'</td>'+
+      '<td>'+(c.id!=='col_uploads'?'<button class="btn ghost mini danger" onclick="delCol(\''+c.id+'\')">Remove</button>':'')+'</td></tr>').join('')+'</table>';
 }
 async function setVis(id,v){await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({update:id,visibility:v})});loadCols()}
-async function setEmails(id,v){await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({update:id,allowed_emails:v.split(',')})});loadCols()}
+async function setEmails(id,v){await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({update:id,allowed_emails:v.split(',')})});toast('Access list saved');loadCols()}
 async function delCol(id){if(confirm('Remove this collection from the library?')){await fetch('/api/collections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({delete:id})});loadCols()}}
 async function saveAdmins(){
   const r=await(await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({admin_emails:$('#adme').value}) })).json();
-  if(r.ok)alert('saved');else alert(r.error||'failed');
+  if(r.ok)toast('Admin list saved');else toast(r.error||'failed',true);
 }
 async function mkInvite(){
   const r=await(await fetch('/api/invite',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name:$('#in').value,role:$('#ir').value,email:$('#ie').value})})).json();
-  if(r.ok){$('#in').value='';$('#ir').value='';$('#ie').value='';loadInvites()}else alert(r.error);
+  if(r.ok){$('#in').value='';$('#ir').value='';$('#ie').value='';toast('Invite created');loadInvites()}else toast(r.error||'failed',true);
 }
 async function revoke(t){await fetch('/api/invite',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({revoke:t})});loadInvites()}
 load();
-</script></div></body></html>"""
+</script></body></html>"""
 
 
 PAGE = r"""<!doctype html><html><head><meta charset="utf-8">
@@ -2299,6 +2430,22 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
 .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
 .chip{background:var(--s0);border:1px solid var(--hair);border-radius:20px;padding:2px 11px;font-size:var(--t-micro);color:var(--muted-solid);letter-spacing:.4px}
 .chip.gold{color:var(--gold);border-color:var(--gold-dim)}
+.hgroup{display:flex;align-items:center;gap:2px;padding:4px 6px 4px 13px;background:var(--s1);border:1px solid var(--hair);border-radius:13px}
+.hglabel{font-size:9px;letter-spacing:2px;font-weight:800;color:var(--red-hi);margin-right:7px;user-select:none}
+.hgroup .btn.ghost{padding:7px 11px;font-size:12.5px;gap:6px}
+.iconbtn{width:40px;height:40px;border-radius:12px;background:var(--s1);border:1px solid var(--hair);color:var(--ink2);
+  display:grid;place-items:center;cursor:pointer;transition:transform .18s var(--spring),border-color .22s,color .22s}
+.iconbtn:hover{border-color:var(--hair-hi);color:var(--ink);transform:translateY(-1px)}
+.iconbtn:active{transform:scale(.94)}
+.me{display:flex;align-items:center;gap:10px;padding:4px 8px 4px 5px;background:var(--s1);border:1px solid var(--hair);border-radius:13px}
+.avatar{width:31px;height:31px;border-radius:9px;background:linear-gradient(135deg,var(--red),var(--red-deep));color:#fff;
+  font-size:12px;font-weight:800;display:grid;place-items:center;letter-spacing:.5px;box-shadow:0 2px 10px var(--glow)}
+.mecol{display:flex;flex-direction:column;gap:1px;line-height:1.15}
+.mename{font-size:12.5px;font-weight:700;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.adminbadge{font-size:8.5px;letter-spacing:1.8px;font-weight:800;color:var(--red-hi)}
+.meout{color:var(--faint);display:grid;place-items:center;padding:6px;border-radius:9px;transition:color .2s,background .2s}
+.meout:hover{color:var(--red-hi);background:var(--glow-soft)}
+@media (max-width:900px){.hgroup .btn.ghost{padding:7px 8px}.hglabel,.mecol{display:none}.me{padding:4px 5px}}
 
 /* ============ view switching ============ */
 .view{display:none;max-width:1360px;margin:0 auto;padding:34px 34px 140px}
@@ -2356,6 +2503,20 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
 .setup .or::before,.setup .or::after{content:"";flex:1;height:1px;background:var(--hair)}
 .setup .foot{display:flex;align-items:center;gap:12px;margin-top:22px}
 .setup .tip{font-size:12px;color:var(--faint);line-height:1.6;margin-top:14px}
+.setuphead{display:flex;gap:14px;align-items:flex-start;margin-bottom:20px}
+.setupicn{flex:none;width:42px;height:42px;border-radius:12px;background:var(--glow-soft);color:var(--red-hi);display:grid;place-items:center;border:1px solid var(--acc-bd)}
+.setuphead .lead{margin-bottom:0}
+.subcard{background:var(--s0);border:1px solid var(--hair);border-radius:16px;padding:20px 22px;margin:6px 0 4px}
+.subcard.rec{border-color:var(--acc-bd);box-shadow:0 0 0 3px var(--glow-soft)}
+.subhead{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:14px;flex-wrap:wrap}
+.rectag{font-size:9px;letter-spacing:1.8px;font-weight:800;color:var(--red-hi);background:var(--glow-soft);padding:3px 9px;border-radius:9px}
+.subnote{color:var(--faint);font-size:12px}
+.fnote{color:var(--faint);font-weight:500;letter-spacing:0;text-transform:none;font-size:11px}
+.codechip{display:flex;align-items:center;gap:10px;margin-top:8px;background:var(--s1);border:1px dashed var(--hair-hi);
+  border-radius:10px;padding:9px 13px;cursor:pointer;transition:border-color .2s}
+.codechip:hover{border-color:var(--red)}
+.codechip code{font:12px ui-monospace,monospace;color:var(--ink2);word-break:break-all;flex:1}
+.codechip i{font-style:normal;font-size:10.5px;letter-spacing:1.2px;font-weight:800;color:var(--red-hi);text-transform:uppercase}
 
 /* ============ SCREENING ============ */
 .screen-wrap{max-width:1180px;margin:0 auto}
@@ -2509,13 +2670,21 @@ input.tx::placeholder,textarea.tx::placeholder{color:var(--faint)}
   <div class="logo" onclick="goLobby()">R</div>
   <div class="brand"><h1>RedTee Screening Room</h1><div class="sub">private preview</div></div>
   <div class="sp"></div>
-  <button class="btn ghost themebtn" onclick="toggleTheme()" title="light / dark"></button>
-  <span class="chip" id="whoami" style="display:none"></span>
-  <span class="chip" id="modebadge"></span>
-  <a class="btn ghost" id="signout" href="/logout" style="display:none">Sign out</a>
-  <button class="btn ghost" id="keybtn" style="display:none" onclick="setKey()" title="add or update the Drive API key">&#9881; API key</button>
-  <button class="btn ghost" onclick="loadVideos(true)">&#8635; Refresh</button>
-  <a class="btn ghost" href="/api/export.csv">&#8681; Export CSV</a>
+  <div class="hgroup" id="admingroup" style="display:none">
+    <span class="hglabel">ADMIN</span>
+    <button class="btn ghost" id="upbtn" onclick="document.getElementById('upfile').click()"><svg class="icn" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> Upload</button>
+    <a class="btn ghost" id="adminlink" href="/admin"><svg class="icn" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg> Console</a>
+    <button class="btn ghost" id="keybtn" onclick="setKey()" title="add or update the Drive API key"><svg class="icn" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.9 12.1 21 2M15 8l3 3M18 5l2 2"/></svg> Key</button>
+    <a class="btn ghost" href="/api/export.csv" title="export all reviews as CSV"><svg class="icn" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> CSV</a>
+  </div>
+  <button class="iconbtn" onclick="loadVideos(true)" title="refresh the library"><svg class="icn" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg></button>
+  <button class="iconbtn themebtn" onclick="toggleTheme()" title="light / dark"></button>
+  <div class="me" id="mewrap" style="display:none">
+    <span class="avatar" id="meavatar"></span>
+    <span class="mecol"><span class="mename" id="mename"></span><span class="adminbadge" id="mebadge" style="display:none">ADMIN</span></span>
+    <a class="meout" id="signout" href="/logout" title="sign out"><svg class="icn" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></a>
+  </div>
+  <input type="file" id="upfile" accept=".mp4,.webm" style="display:none" onchange="uploadVideo(this)">
 </div>
 
 <!-- ================= LOBBY ================= -->
@@ -2528,9 +2697,7 @@ input.tx::placeholder,textarea.tx::placeholder{color:var(--faint)}
     <div class="lobby-tools">
       <input class="search" id="q" placeholder="Search the library...  ( / )" oninput="renderLib()">
       <span class="chip" id="libn"></span>
-      <input type="file" id="upfile" accept=".mp4,.webm" style="display:none" onchange="uploadVideo(this)">
-      <button class="btn" id="upbtn" style="display:none" onclick="document.getElementById('upfile').click()">&#8679; Upload video</button>
-      <a class="btn ghost" id="adminlink" href="/admin" style="display:none">Admin</a>
+      <span class="chip" id="modebadge" title="where this library comes from"></span>
     </div>
   </div>
   <div class="grid" id="cards"></div>
@@ -2868,20 +3035,26 @@ function renderLib(){
     if(VIDEOS.length){c.innerHTML='<div class="empty">Nothing matches that search.</div>';return}
     if(!IS_ADMIN){c.innerHTML='<div class="empty">Your library is empty for now.<br><br>Ask your admin to add you to a collection - new screenings will appear here automatically.</div>';return}
     c.innerHTML='<div class="setup">'+
-      '<h3>Connect your Drive</h3>'+
-      '<p class="lead">Paste your Google Drive <b>folder link</b> - no API key needed. The only requirement: the folder is shared <b>Anyone with the link (Viewer)</b>. Subfolders are scanned too.</p>'+
-      '<div class="fw"><label class="f">DRIVE FOLDER LINK</label><input class="tx" id="su_folder" placeholder="https://drive.google.com/drive/folders/1AbC..."></div>'+
-      '<div class="or">RECOMMENDED: CONNECT GOOGLE (WORKS WITH PRIVATE FOLDERS + SHARED DRIVES)</div>'+
+      '<div class="setuphead"><span class="setupicn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4.5 15h5L8 22l11.5-13h-6L16 2z"/></svg></span>'+
+      '<div><h3>Set up your library</h3><p class="lead">Point the screening room at your videos once - everything after that is automatic. Subfolders are scanned too.</p></div></div>'+
+
+      '<div class="subcard rec"><div class="subhead"><span class="rectag">RECOMMENDED</span><b>Connect Google</b><span class="subnote">works with private folders + shared drives</span></div>'+
       '<div class="fw"><label class="f">OAUTH CLIENT ID</label><input class="tx" id="su_cid" placeholder="....apps.googleusercontent.com"></div>'+
       '<div class="fw"><label class="f" style="margin-top:10px">OAUTH CLIENT SECRET</label><input class="tx" id="su_csec" placeholder="GOCSPX-..."></div>'+
-      '<div class="foot" style="margin-top:12px"><button class="btn" onclick="connectGoogle()">Save &amp; connect Google &#8599;</button>'+
-      '<span class="hint">console.cloud.google.com &rarr; OAuth client (Web) &rarr; redirect URI: <b>'+location.origin+'/oauth/callback</b></span></div>'+
-      '<div class="fw"><label class="f" style="margin-top:14px">API KEY (OPTIONAL - adds durations + sharing checks)</label><input class="tx" id="su_key" placeholder="AIza..."></div>'+
-      '<div class="or">OR PASTE VIDEO LINKS, ONE PER LINE</div>'+
+      '<div class="foot" style="margin-top:14px"><button class="btn primary" onclick="connectGoogle()">Save &amp; connect Google &#8599;</button></div>'+
+      '<div class="tip" style="margin-top:12px">console.cloud.google.com &rarr; OAuth client (Web) &rarr; add this redirect URI:</div>'+
+      '<div class="codechip" onclick="navigator.clipboard.writeText(location.origin+\'/oauth/callback\');this.querySelector(\'i\').textContent=\'copied!\'"><code>'+location.origin+'/oauth/callback</code><i>copy</i></div></div>'+
+
+      '<div class="or">OR: PUBLIC FOLDER LINK - NO SETUP IN GOOGLE CLOUD</div>'+
+      '<div class="fw"><label class="f">DRIVE FOLDER LINK <span class="fnote">(shared: Anyone with the link, Viewer)</span></label><input class="tx" id="su_folder" placeholder="https://drive.google.com/drive/folders/1AbC..."></div>'+
+      '<div class="fw"><label class="f" style="margin-top:10px">API KEY <span class="fnote">(optional - adds durations + sharing checks)</span></label><input class="tx" id="su_key" placeholder="AIza..."></div>'+
+
+      '<div class="or">OR: PASTE VIDEO LINKS, ONE PER LINE</div>'+
       '<textarea class="tx" id="su_links" placeholder="https://drive.google.com/file/d/.../view&#10;https://drive.google.com/file/d/.../view"></textarea>'+
+
       '<div class="foot"><button class="btn primary" id="su_go" onclick="saveSetup()">Connect &amp; scan</button>'+
       '<span class="hint" id="su_msg"></span></div>'+
-      '<div class="tip">In Drive: right-click the folder &rarr; Share &rarr; General access &rarr; <b>Anyone with the link</b>. Settings are saved to review/config.json.</div>'+
+      '<div class="tip">In Drive: right-click the folder &rarr; Share &rarr; General access &rarr; <b>Anyone with the link</b>. You can also just use the <b>Upload</b> button in the top bar.</div>'+
       '</div>';
     return;
   }
@@ -3172,7 +3345,7 @@ async function uploadVideo(inp){
     toast('Uploaded '+r.video+' - it plays in the native player with exact timestamps');
     VIDEOS=[]; await loadVideos(true);
   }catch(e){toast(e.message,true)}
-  btn.disabled=false; btn.innerHTML='&#8679; Upload video'; inp.value='';
+  btn.disabled=false; btn.innerHTML='<svg class="icn" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> Upload'; inp.value='';
 }
 (async()=>{  // invite links sign you in AND introduce you - name lands prefilled
   try{
@@ -3181,9 +3354,14 @@ async function uploadVideo(inp){
       const cur=JSON.parse(localStorage.getItem('rt_reviewer')||'{}');
       if(!cur.name)localStorage.setItem('rt_reviewer',JSON.stringify(me.identity));
     }
-    if(me.identity&&me.identity.name){const w=$('#whoami');w.style.display='';w.textContent=me.identity.name+(me.admin?' - ADMIN':'');$('#signout').style.display=''}
+    if(me.identity&&me.identity.name){
+      $('#mewrap').style.display='flex';
+      $('#meavatar').textContent=(me.identity.name.match(/\b[A-Za-z]/g)||['R']).slice(0,2).join('').toUpperCase();
+      $('#mename').textContent=me.identity.name;
+      if(me.admin)$('#mebadge').style.display='';
+    }
     IS_ADMIN=!!me.admin;
-    if(me.admin){$('#upbtn').style.display='';$('#adminlink').style.display='';$('#keybtn').style.display=''}
+    if(me.admin)$('#admingroup').style.display='flex';
     renderLib();
     if(location.search.includes('invite='))history.replaceState({},'', '/');
   }catch(e){}
