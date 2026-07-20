@@ -1,12 +1,15 @@
-# Render Blueprint for the RedTee Screening Room.
-# Deploy: push this repo, then in Render: New -> Blueprint -> pick this repo.
-# Render reads this file, builds the Dockerfile, attaches the disk, and wires env vars.
+# Render Blueprint for the RedTee Screening Room - FREE (diskless) tier.
+# State is NOT stored on a Render disk; it is snapshotted to Supabase Storage instead
+# (restore on boot, upload on change + on shutdown). That's why no `disk:` is needed and
+# the free plan works. See DEPLOY.md "Free hosting with Supabase snapshots".
+#
+# Deploy: push this repo, then Render -> New -> Blueprint -> pick this repo.
 services:
   - type: web
     name: redtee-screening-room
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter                 # starter+ required for a persistent disk
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: REDTEE_DATA_DIR
@@ -15,13 +18,23 @@ services:
         value: 0.0.0.0
       - key: REDTEE_REVIEW_PORT
         value: "8712"
-      # Access codes are marked sync:false so they are NOT stored in git -
-      # Render prompts you to enter them once in the dashboard.
+      # --- access codes (entered once in the dashboard; not stored in git) ---
       - key: REDTEE_REVIEW_CODE
         sync: false
       - key: REDTEE_REVIEW_ADMIN_CODE
         sync: false
-    disk:
-      name: redtee-data
-      mountPath: /data
-      sizeGB: 3                   # bump if you host uploaded videos on the server
+      # --- Supabase Storage snapshot target (persistence on the free tier) ---
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: redtee-state
+      # Optional: also snapshot uploaded videos (large). Leave unset to rely on Drive for video.
+      # - key: REDTEE_SNAPSHOT_VIDEOS
+      #   value: "1"
+
+# NOTE: The free plan spins down when idle; the first request after idle is slow, and Render
+# sends SIGTERM on spin-down/redeploy - the app takes a final snapshot then. If you later want
+# always-on + a real disk, switch plan to `starter` and add a `disk:` mounted at /data (then the
+# Supabase vars become optional).

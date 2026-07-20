@@ -13,7 +13,7 @@ Videos:   review/config.json - EITHER
 Reviews:  saved as JSON under review/reviews/<video_id>/ (git-ignored; may contain names)
 Export:   /api/export.csv  - one row per review, ratings + answers flattened.
 """
-import hashlib, json, os, re, secrets, shutil, time, urllib.request, urllib.parse
+import hashlib, io, json, os, re, secrets, shutil, tarfile, time, urllib.request, urllib.parse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -27,6 +27,137 @@ REVIEW_DIR = DATA_DIR / "reviews"
 PORT = int(os.environ.get("REDTEE_REVIEW_PORT", "8712"))
 HOST = os.environ.get("REDTEE_REVIEW_HOST", "127.0.0.1")   # 0.0.0.0 for a central org deployment
 MAX_JSON_BODY = 1_000_000                                  # 1 MB cap on JSON POST bodies (DoS guard)
+
+
+# ================= STATE SNAPSHOTS -> Supabase Storage (for free, diskless hosts) =================
+# On a host without a persistent disk, DATA_DIR is wiped on every redeploy / spin-down. This mirrors
+# the whole state folder to a private Supabase Storage bucket: restore on boot, re-upload on change
+# and on shutdown. Credentials come from env (independent of the snapshot), so first boot works.
+#   SUPABASE_URL, SUPABASE_SERVICE_KEY  -> enable it. SUPABASE_BUCKET (default redtee-state),
+#   REDTEE_SNAPSHOT_NAME (state.tar.gz), REDTEE_SNAPSHOT_INTERVAL (60s),
+#   REDTEE_SNAPSHOT_VIDEOS (set to 1 to also snapshot uploaded videos - large; off by default).
+SNAP = {
+    "url": (os.environ.get("SUPABASE_URL") or "").rstrip("/"),
+    "key": os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY") or "",
+    "bucket": os.environ.get("SUPABASE_BUCKET", "redtee-state"),
+    "object": os.environ.get("REDTEE_SNAPSHOT_NAME", "state.tar.gz"),
+    "interval": int(os.environ.get("REDTEE_SNAPSHOT_INTERVAL", "60")),
+    "videos": (os.environ.get("REDTEE_SNAPSHOT_VIDEOS", "") not in ("", "0", "false", "no")),
+}
+_SNAP = {"last_hash": None}
+_SNAP_INCLUDE = ["config.json", "reviews", "bundles", "sessions.json", "invites.json"]
+
+
+def _snap_on() -> bool:
+    return bool(SNAP["url"] and SNAP["key"])
+
+
+def _snap_paths() -> list:
+    inc = list(_SNAP_INCLUDE)
+    if SNAP["videos"]:
+        inc.append("videos")
+    return inc
+
+
+def _snap_hash() -> str:
+    """Cheap change-detector over the state tree (name + size + mtime). Avoids re-uploading
+    an unchanged snapshot every interval."""
+    h = hashlib.sha256()
+    for name in sorted(_snap_paths()):
+        p = DATA_DIR / name
+        if p.is_file():
+            st = p.stat()
+            h.update(f"{name}:{st.st_size}:{st.st_mtime_ns}".encode())
+        elif p.is_dir():
+            for f in sorted(p.rglob("*")):
+                if f.is_file():
+                    st = f.stat()
+                    h.update(f"{f.relative_to(DATA_DIR)}:{st.st_size}:{st.st_mtime_ns}".encode())
+    return h.hexdigest()
+
+
+def _snap_make() -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name in _snap_paths():
+            p = DATA_DIR / name
+            if p.exists():
+                tar.add(str(p), arcname=name)
+    return buf.getvalue()
+
+
+def _sb_headers(extra: dict = None) -> dict:
+    h = {"Authorization": "Bearer " + SNAP["key"], "apikey": SNAP["key"]}
+    if extra:
+        h.update(extra)
+    return h
+
+
+def _sb_object_url() -> str:
+    return f"{SNAP['url']}/storage/v1/object/{SNAP['bucket']}/{urllib.parse.quote(SNAP['object'])}"
+
+
+def _sb_ensure_bucket():
+    req = urllib.request.Request(SNAP["url"] + "/storage/v1/bucket",
+                                 data=json.dumps({"name": SNAP["bucket"], "public": False}).encode(),
+                                 method="POST", headers=_sb_headers({"Content-Type": "application/json"}))
+    try:
+        with urllib.request.urlopen(req, timeout=15):
+            pass
+    except urllib.error.HTTPError as e:
+        if e.code not in (400, 409):                     # already-exists is fine
+            raise
+
+
+def _snap_restore():
+    """Download + extract the snapshot into DATA_DIR. Called once, before config/reviews are read."""
+    if not _snap_on():
+        return
+    try:
+        _sb_ensure_bucket()
+        req = urllib.request.Request(_sb_object_url(), headers=_sb_headers())
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                data = r.read()
+        except urllib.error.HTTPError as e:
+            if e.code in (400, 404):
+                print("  snapshot: none found yet (fresh start)")
+                return
+            raise
+        with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tar:
+            try:
+                tar.extractall(DATA_DIR, filter="data")  # guard against path traversal (3.12+/backports)
+            except TypeError:
+                tar.extractall(DATA_DIR)                  # older Pythons: source is our own private bucket
+        _SNAP["last_hash"] = _snap_hash()
+        print(f"  snapshot: restored {len(data) // 1024} KB from Supabase ({SNAP['bucket']}/{SNAP['object']})")
+    except Exception as e:  # noqa: BLE001 - never block startup on a snapshot problem
+        print(f"  snapshot: restore skipped ({type(e).__name__})")
+
+
+def _snap_save(force: bool = False) -> bool:
+    """Upload the state to Supabase if it changed (or force). Best-effort."""
+    if not _snap_on():
+        return False
+    try:
+        h = _snap_hash()
+        if not force and h == _SNAP["last_hash"]:
+            return False
+        req = urllib.request.Request(_sb_object_url(), data=_snap_make(), method="POST",
+                                     headers=_sb_headers({"Content-Type": "application/gzip", "x-upsert": "true"}))
+        with urllib.request.urlopen(req, timeout=120):
+            pass
+        _SNAP["last_hash"] = h
+        return True
+    except Exception as e:  # noqa: BLE001
+        print(f"  snapshot: upload failed ({type(e).__name__})")
+        return False
+
+
+def _snap_loop():
+    while True:
+        time.sleep(max(15, SNAP["interval"]))
+        _snap_save()
 
 
 # ---------------- org access control (cookie gate; set access_code to enable) ----------------
@@ -1914,6 +2045,13 @@ class H(BaseHTTPRequestHandler):
                         seen[v] = r.get("video_title") or seen.get(v, "")
             pushed = sum(1 for v, t in seen.items() if _push_video_reports(v, t))
             return self._send(200, json.dumps({"ok": True, "pushed": pushed, "videos": len(seen)}))
+        if self.path == "/api/snapshot":
+            if not self._is_admin():
+                return self._send(403, json.dumps({"ok": False, "error": "admin code required"}))
+            if not _snap_on():
+                return self._send(400, json.dumps({"ok": False, "error": "snapshots off (set SUPABASE_URL + SUPABASE_SERVICE_KEY)"}))
+            ok = _snap_save(force=True)
+            return self._send(200 if ok else 502, json.dumps({"ok": ok}))
         if self.path != "/api/review":
             return self._send(404, json.dumps({"error": "not found"}))
         try:
@@ -1931,6 +2069,7 @@ class H(BaseHTTPRequestHandler):
 
 def main():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _snap_restore()                                     # pull state from Supabase BEFORE reading it
     REVIEW_DIR.mkdir(parents=True, exist_ok=True)
     if not CONF_PATH.exists():
         CONF_PATH.write_text(json.dumps({
@@ -1949,6 +2088,22 @@ def main():
           + (f" | admin code {'set' if admin != access else '= access code'}" if access else ""))
     if access and HOST == "127.0.0.1":
         print("  NOTE: access code is set but host is 127.0.0.1 - run with REDTEE_REVIEW_HOST=0.0.0.0 to serve the org")
+    if _snap_on():
+        import threading, signal
+        threading.Thread(target=_snap_loop, daemon=True).start()
+        print(f"  snapshot: Supabase {SNAP['bucket']}/{SNAP['object']} every {SNAP['interval']}s"
+              + ("  (incl. videos)" if SNAP["videos"] else ""))
+
+        def _bye(*_a):                                  # final snapshot on shutdown/redeploy (SIGTERM)
+            _snap_save(force=True)
+            os._exit(0)
+        for _sig in ("SIGTERM", "SIGINT"):
+            try:
+                signal.signal(getattr(signal, _sig), _bye)
+            except (ValueError, AttributeError, OSError):
+                pass
+    else:
+        print("  snapshot: OFF (set SUPABASE_URL + SUPABASE_SERVICE_KEY to persist on a diskless host)")
     ThreadingHTTPServer((HOST, PORT), H).serve_forever()
 
 

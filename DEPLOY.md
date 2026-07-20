@@ -29,6 +29,8 @@ Set these on the service. They override anything in `config.json`:
 | `REDTEE_DATA_DIR`           | `/data`                        | already set in the Dockerfile; leave as is |
 | `REDTEE_REVIEW_HOST`        | `0.0.0.0`                      | already set in the Dockerfile            |
 | `REDTEE_REVIEW_PORT`        | `8712`                         | must match the platform's target port    |
+| `SUPABASE_URL`              | `https://<project>.supabase.co`| only for free/diskless hosting (section 7) |
+| `SUPABASE_SERVICE_KEY`      | service_role key               | only for free/diskless hosting (section 7) |
 
 The platforms all terminate HTTPS at the edge and set `X-Forwarded-Proto: https`, which the
 server uses to mark cookies `Secure`. No cert work needed on your side.
@@ -50,15 +52,21 @@ server uses to mark cookies `Secure`. No cert work needed on your side.
 5. Deploy. Open the generated `https://<app>.up.railway.app` and log in with the admin code at
    `/admin`.
 
-## 2B. Render (Blueprint - mostly automatic)
+## 2B. Render (FREE tier - uses Supabase snapshots for persistence)
+`render.yaml` is configured for the **free** plan with **no disk**. Instead, the app snapshots
+its state to Supabase Storage. Do the Supabase setup in section 8 first (5 minutes), then:
 1. **New → Blueprint** → connect the repo. Render reads `render.yaml` and provisions the web
-   service, the `/data` disk, and the non-secret env vars for you.
-2. Render will prompt for the two secret vars (`REDTEE_REVIEW_CODE`, `REDTEE_REVIEW_ADMIN_CODE`)
-   because they're marked `sync: false` — enter `MondeeAccess` and `RedTee_0806`.
-3. Apply. Visit the `https://<app>.onrender.com` URL and sign in at `/admin`.
+   service and the non-secret env vars.
+2. Render prompts for the `sync: false` secrets — enter:
+   - `REDTEE_REVIEW_CODE` = `MondeeAccess`
+   - `REDTEE_REVIEW_ADMIN_CODE` = `RedTee_0806`
+   - `SUPABASE_URL` = `https://<your-project>.supabase.co`
+   - `SUPABASE_SERVICE_KEY` = your Supabase **service_role** key
+3. Apply. Visit `https://<app>.onrender.com` and sign in at `/admin`.
 
-   (Manual alternative without the Blueprint: New → Web Service → Docker, then add the env vars
-   and a disk mounted at `/data` yourself; make sure the service targets port `8712`.)
+> Want always-on + a real disk instead? Change `plan: free` → `plan: starter` in `render.yaml`
+> and add a `disk:` mounted at `/data` (requires a card, ~$7/mo). The Supabase vars then become
+> optional.
 
 ## 2C. Fly.io
 `fly.toml` is already in the repo (internal port 8712, HTTPS forced, `/health` check, and a
@@ -132,13 +140,51 @@ python export_sidecar.py render_out/<lesson> https://<your-domain> <admin_code>
 This packs timeline + slide SVGs into one sidecar and POSTs it to `/api/bundle` (admin-gated).
 
 ## 6. Backups & migration
-Everything is in the `/data` volume: `config.json`, `reviews/`, `videos/`, `bundles/`,
-`sessions.json`, `invites.json`. Snapshot or copy that volume to back up; attach it to a new
-service to migrate. Losing the volume loses the auth salt (everyone re-logs in), the OAuth
-refresh token, and all reviews — so make sure the volume is actually mounted at `/data` before
-going live.
+All state is `config.json`, `reviews/`, `videos/`, `bundles/`, `sessions.json`, `invites.json`.
+- **Paid/disk deployments:** it lives on the `/data` volume — snapshot or copy that volume to
+  back up; attach it to a new service to migrate.
+- **Free/Supabase deployments:** it lives in the `state.tar.gz` object in your Supabase bucket —
+  that object *is* your backup. Download it to migrate, or point a new service at the same
+  `SUPABASE_URL` + bucket and it restores automatically on boot.
 
-## 7. Security checklist (post-deploy)
+Either way, losing all state loses the auth salt (everyone re-logs in), the Google OAuth refresh
+token, and locally-stored reviews — so confirm persistence is wired (volume mounted, or Supabase
+vars set) before going live.
+
+## 7. Free hosting with Supabase snapshots (no disk, no card)
+On a diskless host the state folder is wiped on every redeploy/spin-down. Set these env vars and
+the app will restore its state from a private Supabase Storage bucket on boot, and re-upload it
+whenever it changes and on shutdown.
+
+**Supabase setup (once):**
+1. Create a free project at supabase.com. Note the **Project URL**
+   (`https://<project>.supabase.co`).
+2. Project **Settings → API** → copy the **service_role** key (secret — server-side only, never
+   ship it to browsers or git).
+3. That's it for Supabase — the app auto-creates the `redtee-state` bucket on first boot.
+
+**Env vars on the host:**
+| Variable                | Value                                   |
+|-------------------------|-----------------------------------------|
+| `SUPABASE_URL`          | `https://<project>.supabase.co`         |
+| `SUPABASE_SERVICE_KEY`  | the service_role key                    |
+| `SUPABASE_BUCKET`       | `redtee-state` (default; optional)      |
+| `REDTEE_SNAPSHOT_INTERVAL` | `60` (seconds; optional)             |
+| `REDTEE_SNAPSHOT_VIDEOS`   | `1` to also snapshot uploaded videos (large; default off) |
+
+**What is snapshotted:** `config.json` (incl. login salt + Google OAuth token), `reviews/`,
+`bundles/`, `sessions.json`, `invites.json`. Uploaded videos are excluded by default (keep them
+in Drive, or set `REDTEE_SNAPSHOT_VIDEOS=1` if you must).
+
+**Durability:** state is re-uploaded on change (checked every `INTERVAL` seconds) and once more on
+shutdown. Worst case you lose the last ~`INTERVAL` seconds of writes on a hard crash — but review
+submissions also push to Drive immediately (section 3.5), so feedback itself is doubly safe. Admins
+can force a snapshot anytime with `POST /api/snapshot`.
+
+**Startup logs** will show `snapshot: restored N KB ...` or `snapshot: none found yet (fresh
+start)`, and `snapshot: Supabase redtee-state/state.tar.gz every 60s` — a quick way to confirm it's on.
+
+## 8. Security checklist (post-deploy)
 - [ ] Confirm the app is reached only over `https://` (all three PaaS enforce this).
 - [ ] Confirm `/api/export.csv` returns 403 unless you're signed in with the admin code.
 - [ ] Confirm the `/data` volume is mounted (upload a test video; it should survive a redeploy).
